@@ -12,12 +12,12 @@ jobs:
   preview:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -34,15 +34,28 @@ jobs:
       - name: Publish AOT
         run: dotnet publish src/AplcoreHandler/AplcoreHandler.csproj -c Release -o publish
 
+      - name: Package preview artifact
+        id: package
+        shell: pwsh
+        run: |
+          $zipName = "AplcoreHandler-${{ steps.version.outputs.version }}-${{ steps.version.outputs.branch }}.zip"
+          Compress-Archive -Path publish/AplcoreHandler.exe -DestinationPath "publish/$zipName" -Force
+          echo "zip_path=publish/$zipName" >> $env:GITHUB_OUTPUT
+
       - name: Create or update draft release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: preview-${{ steps.version.outputs.branch }}
-          name: "Preview: ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.version }})"
-          draft: true
-          prerelease: true
-          files: publish/AplcoreHandler.exe
-          generate_release_notes: false
-          body: |
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: preview-${{ steps.version.outputs.branch }}
+          NAME: Preview: ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.version }})
+          NOTES: |
             Preview build from branch `${{ github.ref_name }}` at commit ${{ github.sha }}.
             Version: `${{ steps.version.outputs.version }}`
+        shell: pwsh
+        run: |
+          if (gh release view $env:TAG *> $null) {
+            gh release edit $env:TAG --title "$env:NAME" --notes "$env:NOTES" --draft --prerelease
+            gh release upload $env:TAG "${{ steps.package.outputs.zip_path }}" --clobber
+          }
+          else {
+            gh release create $env:TAG "${{ steps.package.outputs.zip_path }}" --title "$env:NAME" --notes "$env:NOTES" --draft --prerelease --target "${{ github.sha }}"
+          }
