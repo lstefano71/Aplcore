@@ -1,0 +1,48 @@
+name: Preview Release
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  preview:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          dotnet tool install --global nbgv 2>$null
+          $ver = nbgv get-version -v NuGetPackageVersion
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
+          $branch = "${{ github.ref_name }}" -replace '[^a-zA-Z0-9_.-]', '-'
+          echo "branch=$branch" >> $env:GITHUB_OUTPUT
+
+      - name: Publish AOT
+        run: dotnet publish src/AplcoreHandler/AplcoreHandler.csproj -c Release -o publish
+
+      - name: Create or update draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: preview-${{ steps.version.outputs.branch }}
+          name: "Preview: ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.version }})"
+          draft: true
+          prerelease: true
+          files: publish/AplcoreHandler.exe
+          generate_release_notes: false
+          body: |
+            Preview build from branch `${{ github.ref_name }}` at commit ${{ github.sha }}.
+            Version: `${{ steps.version.outputs.version }}`
