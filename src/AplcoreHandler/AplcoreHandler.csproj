@@ -16,6 +16,11 @@
     <!-- Assembly metadata -->
     <RootNamespace>AplcoreHandler</RootNamespace>
     <AssemblyName>AplcoreHandler</AssemblyName>
+
+    <!-- MinVer: git tag v{major}.{minor}.{patch} is the single source of truth -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <!-- MinVer already encodes commit info in pre-release labels; suppress SDK duplication -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
