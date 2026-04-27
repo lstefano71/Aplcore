@@ -46,13 +46,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: preview-${{ steps.version.outputs.branch }}
-          NAME: Preview: ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.version }})
-          NOTES: |
-            Preview build from branch `${{ github.ref_name }}` at commit ${{ github.sha }}.
-            Version: `${{ steps.version.outputs.version }}`
+          NAME: "Preview: ${{ steps.version.outputs.branch }} (${{ steps.version.outputs.version }})"
+          NOTES: "Preview build from branch `${{ github.ref_name }}` at commit ${{ github.sha }}.\nVersion: `${{ steps.version.outputs.version }}`"
         shell: pwsh
         run: |
-          if (gh release view $env:TAG *> $null) {
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
             gh release edit $env:TAG --title "$env:NAME" --notes "$env:NOTES" --draft --prerelease
             gh release upload $env:TAG "${{ steps.package.outputs.zip_path }}" --clobber
           }
