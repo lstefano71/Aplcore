@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace AplcoreHandler.Models;
@@ -11,20 +10,20 @@ public record AppConfig(
 
 public sealed class DbEntry
 {
-    public required long Size { get; set; }
-    public required DateTime LastModifiedUtc { get; set; }
+  public required long Size { get; set; }
+  public required DateTime LastModifiedUtc { get; set; }
 }
 
 public sealed class AplcoreDb
 {
-    public Dictionary<string, DbEntry> Entries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+  public Dictionary<string, DbEntry> Entries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class TrailerData
 {
-    public required string Metadata { get; init; }
-    public required string AddressSpace { get; init; }
-    public required string AplStack { get; init; }
+  public required string Metadata { get; init; }
+  public required string AddressSpace { get; init; }
+  public required string AplStack { get; init; }
 }
 
 [JsonSerializable(typeof(AppConfig))]

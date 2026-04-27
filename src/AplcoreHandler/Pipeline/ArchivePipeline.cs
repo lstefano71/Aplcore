@@ -6,124 +6,112 @@ namespace AplcoreHandler.Pipeline;
 
 public sealed class ArchivePipeline
 {
-    private readonly AppConfig _config;
-    private readonly IOutputRenderer _output;
-    private readonly bool _dryRun;
+  private readonly AppConfig _config;
+  private readonly IOutputRenderer _output;
+  private readonly bool _dryRun;
 
-    public ArchivePipeline(AppConfig config, IOutputRenderer output, bool dryRun)
-    {
-        _config = config;
-        _output = output;
-        _dryRun = dryRun;
+  public ArchivePipeline(AppConfig config, IOutputRenderer output, bool dryRun)
+  {
+    _config = config;
+    _output = output;
+    _dryRun = dryRun;
+  }
+
+  /// <summary>
+  /// Runs the full archive pipeline. Returns exit code (0=success, 1=partial, 2=fatal).
+  /// </summary>
+  public int Run()
+  {
+    // Ensure target directory exists
+    Directory.CreateDirectory(_config.TargetDirectory);
+
+    var targetDirFull = Path.GetFullPath(_config.TargetDirectory);
+
+    // Phase 1: Discover files
+    _output.ReportScanStart(_config.SourceDirectories.Length);
+
+    var discovered = FileDiscoveryService.Discover(
+        _config.SourceDirectories,
+        _config.FilePattern,
+        excludeDirectory: targetDirFull,
+        _output);
+
+    // Phase 2: Load DB and detect changes
+    using var dbService = new DatabaseService(_config.TargetDirectory, _output);
+    var db = dbService.AcquireAndLoad();
+
+    var toProcess = DatabaseService.DetectChanges(db, discovered);
+
+    _output.ReportScanResult(discovered.Count, toProcess.Count);
+
+    if (toProcess.Count == 0) {
+      _output.ReportSummary(0, 0, 0, _dryRun);
+      return 0;
     }
 
-    /// <summary>
-    /// Runs the full archive pipeline. Returns exit code (0=success, 1=partial, 2=fatal).
-    /// </summary>
-    public int Run()
-    {
-        // Ensure target directory exists
-        Directory.CreateDirectory(_config.TargetDirectory);
+    // Phase 3: Dry run or archive
+    if (_dryRun)
+      return RunDryRun(db, toProcess);
 
-        var targetDirFull = Path.GetFullPath(_config.TargetDirectory);
+    return RunArchive(db, dbService, toProcess);
+  }
 
-        // Phase 1: Discover files
-        _output.ReportScanStart(_config.SourceDirectories.Length);
+  private int RunDryRun(AplcoreDb db, List<FileInfo> toProcess)
+  {
+    foreach (var file in toProcess) {
+      var key = DatabaseService.NormalizePath(file.FullName);
+      var reason = db.Entries.ContainsKey(key) ? "changed" : "new";
+      _output.ReportDryRunItem(file.FullName, file.Length, reason);
+    }
 
-        var discovered = FileDiscoveryService.Discover(
-            _config.SourceDirectories,
-            _config.FilePattern,
-            excludeDirectory: targetDirFull,
-            _output);
+    _output.ReportSummary(0, 0, 0, dryRun: true);
+    return 0;
+  }
 
-        // Phase 2: Load DB and detect changes
-        using var dbService = new DatabaseService(_config.TargetDirectory, _output);
-        var db = dbService.AcquireAndLoad();
+  private int RunArchive(AplcoreDb db, DatabaseService dbService, List<FileInfo> toProcess)
+  {
+    int archived = 0, skipped = 0, errors = 0;
 
-        var toProcess = DatabaseService.DetectChanges(db, discovered);
+    _output.ReportArchiveStart(toProcess.Count);
 
-        _output.ReportScanResult(discovered.Count, toProcess.Count);
+    for (int i = 0; i < toProcess.Count; i++) {
+      var file = toProcess[i];
+      _output.ReportArchiveProgress(file.Name, i + 1, toProcess.Count);
 
-        if (toProcess.Count == 0)
-        {
-            _output.ReportSummary(0, 0, 0, _dryRun);
-            return 0;
+      try {
+        // Extract trailer
+        var rawTrailer = TrailerExtractor.Extract(file.FullName);
+        TrailerData? trailer = null;
+
+        if (rawTrailer is not null) {
+          trailer = MetadataSplitter.Split(rawTrailer);
+        } else {
+          _output.ReportWarning($"No trailer found in {file.Name}, archiving without metadata.");
         }
 
-        // Phase 3: Dry run or archive
-        if (_dryRun)
-            return RunDryRun(db, toProcess);
+        // Create zip archive
+        var success = ArchiveService.Archive(file, _config.TargetDirectory, trailer, _output);
 
-        return RunArchive(db, dbService, toProcess);
-    }
+        if (success) {
+          _output.ReportArchiveComplete(file.Name, rawTrailer is not null);
 
-    private int RunDryRun(AplcoreDb db, List<FileInfo> toProcess)
-    {
-        foreach (var file in toProcess)
-        {
-            var key = DatabaseService.NormalizePath(file.FullName);
-            var reason = db.Entries.ContainsKey(key) ? "changed" : "new";
-            _output.ReportDryRunItem(file.FullName, file.Length, reason);
+          // Update DB after each successful archive (crash-safe)
+          dbService.RecordProcessed(db, file);
+          dbService.Save(db);
+
+          archived++;
+        } else {
+          errors++;
         }
-
-        _output.ReportSummary(0, 0, 0, dryRun: true);
-        return 0;
+      } catch (Exception ex) {
+        _output.ReportError($"Unexpected error processing {file.Name}: {ex.Message}");
+        errors++;
+      }
     }
 
-    private int RunArchive(AplcoreDb db, DatabaseService dbService, List<FileInfo> toProcess)
-    {
-        int archived = 0, skipped = 0, errors = 0;
+    _output.ReportSummary(archived, skipped, errors, dryRun: false);
 
-        _output.ReportArchiveStart(toProcess.Count);
-
-        for (int i = 0; i < toProcess.Count; i++)
-        {
-            var file = toProcess[i];
-            _output.ReportArchiveProgress(file.Name, i + 1, toProcess.Count);
-
-            try
-            {
-                // Extract trailer
-                var rawTrailer = TrailerExtractor.Extract(file.FullName);
-                TrailerData? trailer = null;
-
-                if (rawTrailer is not null)
-                {
-                    trailer = MetadataSplitter.Split(rawTrailer);
-                }
-                else
-                {
-                    _output.ReportWarning($"No trailer found in {file.Name}, archiving without metadata.");
-                }
-
-                // Create zip archive
-                var success = ArchiveService.Archive(file, _config.TargetDirectory, trailer, _output);
-
-                if (success)
-                {
-                    _output.ReportArchiveComplete(file.Name, rawTrailer is not null);
-
-                    // Update DB after each successful archive (crash-safe)
-                    dbService.RecordProcessed(db, file);
-                    dbService.Save(db);
-
-                    archived++;
-                }
-                else
-                {
-                    errors++;
-                }
-            }
-            catch (Exception ex)
-            {
-                _output.ReportError($"Unexpected error processing {file.Name}: {ex.Message}");
-                errors++;
-            }
-        }
-
-        _output.ReportSummary(archived, skipped, errors, dryRun: false);
-
-        // Exit code: 0=all OK, 1=some skipped/errors
-        return errors > 0 ? 1 : 0;
-    }
+    // Exit code: 0=all OK, 1=some skipped/errors
+    return errors > 0 ? 1 : 0;
+  }
 }
