@@ -10,7 +10,10 @@ public static class ArchiveService
   private const int MaxRetries = 3;
   private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
 
-  public static bool Archive(
+  /// <summary>
+  /// Creates a zip archive. Returns the full zip path on success, null on failure.
+  /// </summary>
+  public static string? Archive(
       FileInfo sourceFile,
       string targetDirectory,
       TrailerData? trailer,
@@ -37,13 +40,13 @@ public static class ArchiveService
 
       // Atomic move from temp to final
       File.Move(tmpPath, zipPath, overwrite: true);
-      return true;
+      return zipPath;
     } catch (Exception ex) {
       output.ReportError($"Failed to archive {sourceFile.Name}: {ex.Message}");
       // Clean up partial files
       try { File.Delete(tmpPath); } catch { /* best effort */ }
       try { File.Delete(zipPath); } catch { /* best effort */ }
-      return false;
+      return null;
     }
   }
 

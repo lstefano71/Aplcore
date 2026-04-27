@@ -45,7 +45,7 @@ public sealed class ArchivePipeline
     _output.ReportScanResult(discovered.Count, toProcess.Count);
 
     if (toProcess.Count == 0) {
-      _output.ReportSummary(0, 0, 0, _dryRun);
+      _output.ReportSummary(0, 0, 0, 0, 0, _dryRun);
       return 0;
     }
 
@@ -58,25 +58,28 @@ public sealed class ArchivePipeline
 
   private int RunDryRun(AplcoreDb db, List<FileInfo> toProcess)
   {
+    long totalSourceBytes = 0;
     foreach (var file in toProcess) {
       var key = DatabaseService.NormalizePath(file.FullName);
       var reason = db.Entries.ContainsKey(key) ? "changed" : "new";
       _output.ReportDryRunItem(file.FullName, file.Length, reason);
+      totalSourceBytes += file.Length;
     }
 
-    _output.ReportSummary(0, 0, 0, dryRun: true);
+    _output.ReportSummary(0, 0, 0, totalSourceBytes, 0, dryRun: true);
     return 0;
   }
 
   private int RunArchive(AplcoreDb db, DatabaseService dbService, List<FileInfo> toProcess)
   {
     int archived = 0, skipped = 0, errors = 0;
+    long totalSourceBytes = 0, totalZipBytes = 0;
 
     _output.ReportArchiveStart(toProcess.Count);
 
     for (int i = 0; i < toProcess.Count; i++) {
       var file = toProcess[i];
-      _output.ReportArchiveProgress(file.Name, i + 1, toProcess.Count);
+      _output.ReportArchiveProgress(file.FullName, file.Length, file.LastWriteTimeUtc, i + 1, toProcess.Count);
 
       try {
         // Extract trailer
@@ -90,10 +93,14 @@ public sealed class ArchivePipeline
         }
 
         // Create zip archive
-        var success = ArchiveService.Archive(file, _config.TargetDirectory, trailer, _output);
+        var zipPath = ArchiveService.Archive(file, _config.TargetDirectory, trailer, _output);
 
-        if (success) {
-          _output.ReportArchiveComplete(file.Name, rawTrailer is not null);
+        if (zipPath is not null) {
+          _output.ReportArchiveComplete(file.Name, rawTrailer is not null, zipPath);
+
+          totalSourceBytes += file.Length;
+          var zipInfo = new FileInfo(zipPath);
+          totalZipBytes += zipInfo.Length;
 
           // Update DB after each successful archive (crash-safe)
           dbService.RecordProcessed(db, file);
@@ -109,7 +116,7 @@ public sealed class ArchivePipeline
       }
     }
 
-    _output.ReportSummary(archived, skipped, errors, dryRun: false);
+    _output.ReportSummary(archived, skipped, errors, totalSourceBytes, totalZipBytes, dryRun: false);
 
     // Exit code: 0=all OK, 1=some skipped/errors
     return errors > 0 ? 1 : 0;

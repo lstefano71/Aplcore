@@ -3,7 +3,10 @@ using AplcoreHandler.Output;
 using AplcoreHandler.Pipeline;
 
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+
+Console.OutputEncoding = Encoding.UTF8;
 
 var version = Assembly.GetExecutingAssembly()
     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
@@ -70,6 +73,8 @@ if (string.IsNullOrWhiteSpace(config.TargetDirectory)) {
 }
 
 // Run pipeline
+output.ReportConfig(config, configPath, dryRun);
+
 try {
   var pipeline = new ArchivePipeline(config, output, dryRun);
   return pipeline.Run();
