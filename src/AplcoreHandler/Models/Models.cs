@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace AplcoreHandler.Models;
 
+[JsonConverter(typeof(SourceDirectoryConverter))]
 public record SourceDirectory(string Path, string Label = "");
 
 /// <summary>
@@ -57,7 +58,6 @@ public sealed class SourceDirectoryConverter : JsonConverter<SourceDirectory>
 }
 
 public record AppConfig(
-    [property: JsonConverter(typeof(SourceDirectoryConverter))]
     SourceDirectory[] SourceDirectories,
     string TargetDirectory,
     string FilePattern = "aplcore*",
