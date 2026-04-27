@@ -10,10 +10,11 @@ public sealed class SpectreRenderer : IOutputRenderer
   {
     AnsiConsole.Write(new FigletText("AplcoreHandler")
         .Color(Color.CadetBlue));
-    AnsiConsole.Write(
-   new Rule($"[dim]Aplcore packer[/]  [white]v{ThisAssembly.AssemblyInformationalVersion}[/]")
-       .LeftJustified()
-       .RuleStyle(Style.Parse("cyan1 dim")));
+        AnsiConsole.Write(
+        new Rule($"[dim]Aplcore packer[/]  [white]v{version}[/]")
+            .LeftJustified()
+            .RuleStyle(Style.Parse("cyan1 dim")));
+
     AnsiConsole.WriteLine();
   }
 
