@@ -9,7 +9,7 @@ A CLI tool that automatically discovers, catalogs, and archives [Dyalog APL](htt
 - **Automatic discovery** — recursively scans configured directories for aplcore files using glob patterns
 - **Change tracking** — JSON database tracks which files have been processed; only new or modified files are archived
 - **Metadata extraction** — reads the binary trailer directly (no `wsdump.exe` dependency), splits it into separate consultable files
-- **Timestamped archives** — creates `yyyyMMdd_HHmmss_<filename>.zip` with the aplcore, metadata, address space map, and APL stack
+- **Timestamped archives** — creates zip archives named by a configurable template (default: `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}.zip`)
 - **Rich CLI** — [Spectre.Console](https://spectreconsole.net/) progress bars and tables when interactive; plain text in CI
 - **TeamCity integration** — auto-detects TeamCity, emits service messages with build statistics
 - **AOT-compiled** — single self-contained `.exe`, no .NET runtime required
@@ -25,7 +25,7 @@ A CLI tool that automatically discovers, catalogs, and archives [Dyalog APL](htt
 {
   "sourceDirectories": [
     "\\\\server\\aplcores",
-    "D:\\dumps"
+    { "path": "D:\\dumps", "label": "Production" }
   ],
   "targetDirectory": "D:\\archive",
   "filePattern": "aplcore*"
@@ -67,15 +67,17 @@ AplcoreHandler.exe my_config.json --ci
 
 ## Archive Structure
 
-Each aplcore is packaged into a zip:
+Each aplcore is packaged into a zip named by the configurable template (default: `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}.zip`):
 
 ```
-20260401_112337_aplcore_10.zip
-├── 20260401_112337_aplcore_10    # renamed aplcore file
-├── metadata.txt                   # crash info, versions, config
-├── address_space.txt              # virtual memory map (!AddressSpace lines)
-└── apl_stack.txt                  # APL call stacks (!APLStack lines)
+20260401_112337_Production_aplcore_10_d20.0.53273.zip
+├── 20260401_112337_Production_aplcore_10_d20.0.53273   # renamed aplcore
+├── dyalog20.0.53273-U64.txt                             # crash info, versions, config
+├── address_space.txt                                    # virtual memory map
+└── apl_stack.txt                                        # APL call stacks
 ```
+
+When version cannot be extracted the metadata file falls back to `metadata.txt`.
 
 ## Output Modes
 

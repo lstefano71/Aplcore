@@ -10,19 +10,58 @@ AplcoreHandler is configured via a JSON file. By default it looks for `aplcore_c
 {
   "sourceDirectories": [
     "\\\\server1\\aplcores",
-    "\\\\server2\\dumps",
+    { "path": "\\\\server2\\dumps", "label": "Production" },
     "D:\\local-dumps"
   ],
   "targetDirectory": "D:\\archive\\aplcores",
-  "filePattern": "aplcore*"
+  "filePattern": "aplcore*",
+  "zipNameTemplate": "{timestamp}_{label}_{name}_d{major}.{minor}.{revision}"
 }
 ```
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `sourceDirectories` | `string[]` | Yes | — | Directories to scan recursively for aplcore files |
+| `sourceDirectories` | array | Yes | — | Directories to scan. Each entry is either a plain path string or an object `{"path": "…", "label": "…"}` |
 | `targetDirectory` | `string` | Yes | — | Where to write zip archives and the tracking database |
 | `filePattern` | `string` | No | `aplcore*` | Glob pattern for matching files |
+| `zipNameTemplate` | `string` | No | `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}` | Template for zip file names (see below) |
+
+### Source Directory Labels
+
+Each entry in `sourceDirectories` can be a plain string path or an object with an optional `label`:
+
+```json
+"sourceDirectories": [
+  "D:\\dumps",
+  { "path": "\\\\server\\aplcores", "label": "Production" },
+  { "path": "D:\\dev-dumps", "label": "Dev" }
+]
+```
+
+The label becomes part of the zip file name via the `{label}` template token.
+
+### Zip Name Template
+
+The `zipNameTemplate` field controls how archive names are formed. Available tokens:
+
+| Token | Value |
+|-------|-------|
+| `{timestamp}` | File's last modified time in UTC: `yyyyMMdd_HHmmss` |
+| `{name}` | Original aplcore filename |
+| `{label}` | Source directory label (empty string if not set) |
+| `{major}` | Interpreter major version (from trailer) |
+| `{minor}` | Interpreter minor version (from trailer) |
+| `{revision}` | Interpreter SVN revision (from trailer) |
+
+`.zip` is always appended automatically. Consecutive `_` characters that result from empty tokens are collapsed to a single `_`.
+
+**Examples:**
+
+| Template | Label | Version | Result |
+|----------|-------|---------|--------|
+| `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}` | `Production` | 20.0.53273 | `20260401_112337_Production_aplcore_10_d20.0.53273.zip` |
+| `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}` | *(empty)* | 20.0.53273 | `20260401_112337_aplcore_10_d20.0.53273.zip` |
+| `{timestamp}_{name}` | *(any)* | *(any)* | `20260401_112337_aplcore_10.zip` |
 
 ### File Pattern Details
 
@@ -67,8 +106,8 @@ A file is queued for archival when:
 For each file to archive:
 
 1. **Trailer extraction** — the tool seeks to near the end of the binary file (1MB from EOF) and searches for the marker `========================== Interesting Information`. No need for `wsdump.exe`.
-2. **Metadata splitting** — the trailer text is split into three files:
-   - `metadata.txt` — general crash info (serial, version, config, exception, registers, C stack)
+2. **Metadata splitting** — the trailer text is split into files:
+   - `dyalog{major}.{minor}.{revision}-{edition}{bits}.txt` — general crash info (serial, version, config, exception, registers, C stack). Named `metadata.txt` when version cannot be extracted.
    - `address_space.txt` — all `!AddressSpace:` lines (virtual memory map with loaded DLLs)
    - `apl_stack.txt` — all `!APLStack:` lines (APL-level call stacks per green thread)
 3. **Zip creation** — a zip archive is created in the target directory containing:
@@ -78,15 +117,15 @@ For each file to archive:
 
 ### Zip Naming
 
-Archives are named: `yyyyMMdd_HHmmss_<original_filename>.zip`
+Archives are named using the `zipNameTemplate` from the config (default: `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}`). With no label and a known version this produces `yyyyMMdd_HHmmss_<filename>_d<major>.<minor>.<revision>.zip`.
 
-The timestamp is the file's **last modified time in UTC**. Inside the zip, the aplcore is also renamed with the same timestamp prefix.
+The timestamp is the file's **last modified time in UTC**. Inside the zip, the aplcore is also renamed with the same computed base name.
 
-Example: an `aplcore_10` file last modified at 2026-04-01 11:23:37 UTC produces:
+Example: an `aplcore_10` from a directory labelled `Production`, interpreter v20.0.53273, last modified at 2026-04-01 11:23:37 UTC produces:
 ```
-20260401_112337_aplcore_10.zip
-├── 20260401_112337_aplcore_10
-├── metadata.txt
+20260401_112337_Production_aplcore_10_d20.0.53273.zip
+├── 20260401_112337_Production_aplcore_10_d20.0.53273    # renamed aplcore
+├── dyalog20.0.53273-U64.txt                              # metadata (version + edition + bits)
 ├── address_space.txt
 └── apl_stack.txt
 ```

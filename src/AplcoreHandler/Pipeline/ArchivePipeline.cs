@@ -56,21 +56,21 @@ public sealed class ArchivePipeline
     return RunArchive(db, dbService, toProcess);
   }
 
-  private int RunDryRun(AplcoreDb db, List<FileInfo> toProcess)
+  private int RunDryRun(AplcoreDb db, List<DiscoveredFile> toProcess)
   {
     long totalSourceBytes = 0;
-    foreach (var file in toProcess) {
-      var key = DatabaseService.NormalizePath(file.FullName);
+    foreach (var item in toProcess) {
+      var key = DatabaseService.NormalizePath(item.File.FullName);
       var reason = db.Entries.ContainsKey(key) ? "changed" : "new";
-      _output.ReportDryRunItem(file.FullName, file.Length, reason);
-      totalSourceBytes += file.Length;
+      _output.ReportDryRunItem(item.File.FullName, item.File.Length, reason);
+      totalSourceBytes += item.File.Length;
     }
 
     _output.ReportSummary(0, 0, 0, totalSourceBytes, 0, dryRun: true);
     return 0;
   }
 
-  private int RunArchive(AplcoreDb db, DatabaseService dbService, List<FileInfo> toProcess)
+  private int RunArchive(AplcoreDb db, DatabaseService dbService, List<DiscoveredFile> toProcess)
   {
     int archived = 0, skipped = 0, errors = 0;
     long totalSourceBytes = 0, totalZipBytes = 0;
@@ -78,7 +78,8 @@ public sealed class ArchivePipeline
     _output.ReportArchiveStart(toProcess.Count);
 
     for (int i = 0; i < toProcess.Count; i++) {
-      var file = toProcess[i];
+      var item = toProcess[i];
+      var file = item.File;
       _output.ReportArchiveProgress(file.FullName, file.Length, file.LastWriteTimeUtc, i + 1, toProcess.Count);
 
       try {
@@ -93,7 +94,13 @@ public sealed class ArchivePipeline
         }
 
         // Create zip archive
-        var zipPath = ArchiveService.Archive(file, _config.TargetDirectory, trailer, _output);
+        var zipPath = ArchiveService.Archive(
+            file,
+            _config.TargetDirectory,
+            item.Label,
+            trailer,
+            _config.ZipNameTemplate,
+            _output);
 
         if (zipPath is not null) {
           _output.ReportArchiveComplete(file.Name, rawTrailer is not null, zipPath);

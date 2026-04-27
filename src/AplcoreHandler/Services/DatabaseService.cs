@@ -46,20 +46,20 @@ public sealed class DatabaseService : IDisposable
   public static string NormalizePath(string path) =>
       Path.GetFullPath(path);
 
-  public static List<FileInfo> DetectChanges(AplcoreDb db, List<FileInfo> discovered)
+  public static List<DiscoveredFile> DetectChanges(AplcoreDb db, List<DiscoveredFile> discovered)
   {
-    var toProcess = new List<FileInfo>();
+    var toProcess = new List<DiscoveredFile>();
 
-    foreach (var file in discovered) {
-      var key = NormalizePath(file.FullName);
+    foreach (var item in discovered) {
+      var key = NormalizePath(item.File.FullName);
 
       if (db.Entries.TryGetValue(key, out var entry)) {
-        if (entry.Size != file.Length ||
-            entry.LastModifiedUtc != file.LastWriteTimeUtc) {
-          toProcess.Add(file);
+        if (entry.Size != item.File.Length ||
+            entry.LastModifiedUtc != item.File.LastWriteTimeUtc) {
+          toProcess.Add(item);
         }
       } else {
-        toProcess.Add(file);
+        toProcess.Add(item);
       }
     }
 

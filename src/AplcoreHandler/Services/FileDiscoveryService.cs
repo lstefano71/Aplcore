@@ -1,3 +1,4 @@
+using AplcoreHandler.Models;
 using AplcoreHandler.Output;
 
 using DotNet.Globbing;
@@ -6,16 +7,18 @@ namespace AplcoreHandler.Services;
 
 public static class FileDiscoveryService
 {
-  public static List<FileInfo> Discover(
-      string[] sourceDirectories,
+  public static List<DiscoveredFile> Discover(
+      SourceDirectory[] sourceDirectories,
       string filePattern,
       string? excludeDirectory,
       IOutputRenderer output)
   {
     var glob = Glob.Parse(filePattern);
-    var results = new List<FileInfo>();
+    var results = new List<DiscoveredFile>();
 
-    foreach (var dir in sourceDirectories) {
+    foreach (var sourceDir in sourceDirectories) {
+      var dir = sourceDir.Path;
+
       if (!Directory.Exists(dir)) {
         output.ReportWarning($"Source directory not found: {dir}");
         continue;
@@ -32,7 +35,7 @@ public static class FileDiscoveryService
 
           // Match glob pattern and exclude files with extensions
           if (glob.IsMatch(fileName) && !Path.HasExtension(fileName)) {
-            results.Add(new FileInfo(file));
+            results.Add(new DiscoveredFile(new FileInfo(file), sourceDir.Label));
           }
         }
       } catch (UnauthorizedAccessException) {

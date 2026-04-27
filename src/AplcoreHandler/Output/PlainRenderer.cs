@@ -12,8 +12,10 @@ public class PlainRenderer : IOutputRenderer
     Console.WriteLine($"Config:       {Path.GetFullPath(configPath)}");
     Console.WriteLine($"Pattern:      {config.FilePattern}");
     Console.WriteLine($"Target:       {Path.GetFullPath(config.TargetDirectory)}");
-    foreach (var dir in config.SourceDirectories)
-      Console.WriteLine($"  Source:     {dir}");
+    foreach (var dir in config.SourceDirectories) {
+      var label = string.IsNullOrEmpty(dir.Label) ? "" : $" ({dir.Label})";
+      Console.WriteLine($"  Source:     {dir.Path}{label}");
+    }
     if (dryRun)
       Console.WriteLine("Mode:         DRY RUN");
     Console.WriteLine();

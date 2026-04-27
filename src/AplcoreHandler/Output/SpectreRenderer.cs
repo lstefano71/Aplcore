@@ -29,8 +29,10 @@ public sealed class SpectreRenderer : IOutputRenderer
     table.AddRow("Config file", Markup.Escape(Path.GetFullPath(configPath)));
     table.AddRow("Pattern", Markup.Escape(config.FilePattern));
     table.AddRow("Target", Markup.Escape(Path.GetFullPath(config.TargetDirectory)));
-    foreach (var dir in config.SourceDirectories)
-      table.AddRow("Source", Markup.Escape(dir));
+    foreach (var dir in config.SourceDirectories) {
+      var label = string.IsNullOrEmpty(dir.Label) ? "" : $" [grey]({Markup.Escape(dir.Label)})[/]";
+      table.AddRow("Source", Markup.Escape(dir.Path) + label);
+    }
     if (dryRun)
       table.AddRow("Mode", "[yellow]DRY RUN[/]");
 

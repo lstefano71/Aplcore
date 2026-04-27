@@ -59,7 +59,13 @@ try {
   }
 
   var json = File.ReadAllText(configPath);
-  config = JsonSerializer.Deserialize(json, AppJsonContext.Default.AppConfig)
+  // Allow trailing commas and // or /* */ comments in the config file
+  var relaxedOptions = new JsonSerializerOptions {
+    AllowTrailingCommas = true,
+    ReadCommentHandling = JsonCommentHandling.Skip,
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+  };
+  config = JsonSerializer.Deserialize(json, new AppJsonContext(relaxedOptions).AppConfig)
            ?? throw new JsonException("Config deserialized to null");
 } catch (JsonException ex) {
   output.ReportError($"Invalid config file: {ex.Message}");

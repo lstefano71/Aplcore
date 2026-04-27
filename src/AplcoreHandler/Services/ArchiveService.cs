@@ -2,6 +2,7 @@ using AplcoreHandler.Models;
 using AplcoreHandler.Output;
 
 using System.IO.Compression;
+using System.Text.RegularExpressions;
 
 namespace AplcoreHandler.Services;
 
@@ -16,11 +17,17 @@ public static class ArchiveService
   public static string? Archive(
       FileInfo sourceFile,
       string targetDirectory,
+      string label,
       TrailerData? trailer,
+      string zipNameTemplate,
       IOutputRenderer output)
   {
     var timestamp = sourceFile.LastWriteTimeUtc.ToString("yyyyMMdd_HHmmss");
-    var baseName = $"{timestamp}_{sourceFile.Name}";
+    var version = trailer?.Version;
+
+    var baseName = BuildZipBaseName(zipNameTemplate, timestamp, sourceFile.Name, label, version);
+    var metadataFileName = BuildMetadataFileName(version);
+
     var zipPath = Path.Combine(targetDirectory, baseName + ".zip");
     var tmpPath = zipPath + ".tmp";
 
@@ -32,7 +39,7 @@ public static class ArchiveService
 
         // Add metadata files if trailer was extracted
         if (trailer is not null) {
-          AddTextEntry(archive, "metadata.txt", trailer.Metadata);
+          AddTextEntry(archive, metadataFileName, trailer.Metadata);
           AddTextEntry(archive, "address_space.txt", trailer.AddressSpace);
           AddTextEntry(archive, "apl_stack.txt", trailer.AplStack);
         }
@@ -71,6 +78,39 @@ public static class ArchiveService
 
     output.ReportWarning($"Skipping locked file after {MaxRetries} retries: {file.Name}");
     return null;
+  }
+
+  internal static string BuildZipBaseName(
+      string template, string timestamp, string aplcoreName,
+      string label, InterpreterVersion? version)
+  {
+    var result = template
+        .Replace("{timestamp}", timestamp)
+        .Replace("{name}", aplcoreName)
+        .Replace("{label}", label)
+        .Replace("{major}", version?.Major.ToString() ?? "")
+        .Replace("{minor}", version?.Minor.ToString() ?? "")
+        .Replace("{revision}", version?.Revision.ToString() ?? "");
+
+    // Collapse runs of underscores and trim leading/trailing underscores
+    result = CollapseUnderscores(result);
+
+    return result;
+  }
+
+  internal static string BuildMetadataFileName(InterpreterVersion? version)
+  {
+    if (version is null)
+      return "metadata.txt";
+
+    return $"dyalog{version.Major}.{version.Minor}.{version.Revision}-{version.EditionInitial}{version.Bits}.txt";
+  }
+
+  private static string CollapseUnderscores(string s)
+  {
+    // Replace two-or-more consecutive underscores with one, then trim
+    s = Regex.Replace(s, "__{1,}", "_");
+    return s.Trim('_');
   }
 
   private static void AddFileEntry(
