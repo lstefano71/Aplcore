@@ -111,7 +111,7 @@ dotnet publish src/AplcoreHandler/AplcoreHandler.csproj -c Release -o publish
 
 ## Versioning
 
-Uses [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning). Version is computed from git history automatically. The tool always displays its version in the startup banner.
+Uses [MinVer](https://github.com/adamralph/minver). Version is driven by git tags (`v{major}.{minor}.{patch}`). The tool always displays its version in the startup banner.
 
 ## Documentation
 

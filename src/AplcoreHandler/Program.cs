@@ -12,6 +12,11 @@ var version = Assembly.GetExecutingAssembly()
     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
     ?.InformationalVersion ?? "unknown";
 
+// The SDK embeds the full 40-char SHA as +<sha>; trim to 7 for display.
+var plusIdx = version.IndexOf('+');
+if (plusIdx >= 0 && version.Length - plusIdx - 1 > 7)
+  version = version[..(plusIdx + 8)]; // keep +<7 chars>
+
 // Parse CLI arguments
 var configPath = "aplcore_config.json";
 var dryRun = false;

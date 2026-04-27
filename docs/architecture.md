@@ -141,10 +141,10 @@ If a new section needs to be extracted from the trailer:
 
 ## Versioning
 
-[Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning) computes the version from `version.json` + git height.
+[MinVer](https://github.com/adamralph/minver) computes the version from the nearest git tag (prefix `v`).
 
-- **Main branch**: `0.1.<height>` (e.g., `0.1.42`)
-- **Other branches**: `0.1.<height>-<branch>.<height>` (e.g., `0.1.42-feature-foo.3`)
+- **Tagged commit** (e.g., `v0.4.0`): `0.4.0`
+- **Commits after a tag**: `0.4.1-alpha.0.<height>` (e.g., `0.4.1-alpha.0.3`)
 
 The version is embedded as `AssemblyInformationalVersion` and displayed in the startup banner via:
 ```csharp

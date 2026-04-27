@@ -25,8 +25,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          dotnet tool install --global nbgv 2>$null
-          $ver = nbgv get-version -v NuGetPackageVersion
+          $ver = (dotnet msbuild src/AplcoreHandler/AplcoreHandler.csproj -getProperty:Version -nologo).Trim()
           echo "version=$ver" >> $env:GITHUB_OUTPUT
           $branch = "${{ github.ref_name }}" -replace '[^a-zA-Z0-9_.-]', '-'
           echo "branch=$branch" >> $env:GITHUB_OUTPUT
