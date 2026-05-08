@@ -21,18 +21,17 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Publish AOT
+        run: dotnet publish src/AplcoreHandler/AplcoreHandler.csproj -c Release -o publish
+
       - name: Get version
         id: version
         shell: pwsh
         run: |
-          dotnet restore src/AplcoreHandler/AplcoreHandler.csproj
-          $ver = (dotnet msbuild src/AplcoreHandler/AplcoreHandler.csproj -getProperty:Version -nologo).Trim()
+          $ver = (Get-Item publish/AplcoreHandler.exe).VersionInfo.ProductVersion
           echo "version=$ver" >> $env:GITHUB_OUTPUT
           $branch = "${{ github.ref_name }}" -replace '[^a-zA-Z0-9_.-]', '-'
           echo "branch=$branch" >> $env:GITHUB_OUTPUT
-
-      - name: Publish AOT
-        run: dotnet publish src/AplcoreHandler/AplcoreHandler.csproj -c Release -o publish
 
       - name: Package preview artifact
         id: package
