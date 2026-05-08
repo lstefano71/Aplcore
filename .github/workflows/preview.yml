@@ -25,6 +25,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
+          dotnet restore src/AplcoreHandler/AplcoreHandler.csproj
           $ver = (dotnet msbuild src/AplcoreHandler/AplcoreHandler.csproj -getProperty:Version -nologo).Trim()
           echo "version=$ver" >> $env:GITHUB_OUTPUT
           $branch = "${{ github.ref_name }}" -replace '[^a-zA-Z0-9_.-]', '-'
