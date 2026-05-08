@@ -28,7 +28,8 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $ver = (Get-Item publish/AplcoreHandler.exe).VersionInfo.ProductVersion
+          $raw = (Get-Item publish/AplcoreHandler.exe).VersionInfo.ProductVersion
+          $ver = $raw -replace '(\+[0-9a-f]{7})[0-9a-f]+$', '$1'
           echo "version=$ver" >> $env:GITHUB_OUTPUT
           $branch = "${{ github.ref_name }}" -replace '[^a-zA-Z0-9_.-]', '-'
           echo "branch=$branch" >> $env:GITHUB_OUTPUT
