@@ -1,6 +1,7 @@
 using AplcoreHandler.Models;
 using AplcoreHandler.Output;
 using AplcoreHandler.Pipeline;
+using AplcoreHandler.Services;
 
 using System.Reflection;
 using System.Text;
@@ -83,6 +84,26 @@ if (string.IsNullOrWhiteSpace(config.TargetDirectory)) {
   return 2;
 }
 
+// Validate SFTP config (if present)
+if (config.Sftp is not null) {
+  var sftpErrors = ConfigResolver.ValidateSftpConfig(config.Sftp);
+  if (sftpErrors.Count > 0) {
+    foreach (var err in sftpErrors)
+      output.ReportError(err);
+    return 2;
+  }
+}
+
+// Validate SMTP config (if present)
+if (config.Smtp is not null) {
+  var smtpErrors = ConfigResolver.ValidateSmtpConfig(config.Smtp);
+  if (smtpErrors.Count > 0) {
+    foreach (var err in smtpErrors)
+      output.ReportError(err);
+    return 2;
+  }
+}
+
 // Run pipeline
 output.ReportConfig(config, configPath, dryRun);
 
@@ -121,7 +142,11 @@ static void PrintUsage(string version)
   Console.WriteLine("  config-path    Path to JSON config file (default: aplcore_config.json)");
   Console.WriteLine();
   Console.WriteLine("Options:");
-  Console.WriteLine("  --dry-run      Scan and report without archiving");
+  Console.WriteLine("  --dry-run      Scan and report without archiving or uploading");
   Console.WriteLine("  --ci           Force non-interactive output mode");
   Console.WriteLine("  --help, -h     Show this help");
+  Console.WriteLine();
+  Console.WriteLine("Environment variables:");
+  Console.WriteLine("  APLCORE_SFTP_PASSWORD  Override SFTP password from config");
+  Console.WriteLine("  APLCORE_SMTP_PASSWORD  Override SMTP password from config");
 }

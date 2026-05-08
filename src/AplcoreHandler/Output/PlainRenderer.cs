@@ -71,6 +71,41 @@ public class PlainRenderer : IOutputRenderer
   public virtual void ReportDryRunItem(string filePath, long sizeBytes, string reason) =>
       Console.WriteLine($"  → {Path.GetFileName(filePath)} ({FormatSize(sizeBytes)}) [{reason}]");
 
+  public virtual void ReportTransferStart(int fileCount) =>
+      Console.WriteLine($"Uploading {fileCount} file(s) via SFTP...");
+
+  public virtual void ReportTransferProgress(string fileName, long sizeBytes, int current, int total) =>
+      Console.WriteLine($"[{current}/{total}] {fileName} ({FormatSize(sizeBytes)})");
+
+  public virtual void ReportTransferResult(string fileName, string outcome)
+  {
+    var symbol = outcome == "error" ? "✗" : "✓";
+    Console.WriteLine($"  → {fileName}: {symbol} {outcome}");
+  }
+
+  public virtual void ReportTransferSummary(int uploaded, int skipped, int failed)
+  {
+    Console.WriteLine();
+    Console.WriteLine("=== TRANSFER SUMMARY ===");
+    Console.WriteLine($"  Uploaded:     {uploaded}");
+    Console.WriteLine($"  Skipped:      {skipped}");
+    Console.WriteLine($"  Failed:       {failed}");
+  }
+
+  public virtual void ReportNotificationSent(string[] recipients) =>
+      Console.WriteLine($"  ✉ Email sent to: {string.Join(", ", recipients)}");
+
+  public virtual void ReportDryRunTransferItem(string fileName, long sizeBytes, string status) =>
+      Console.WriteLine($"  → {fileName} ({FormatSize(sizeBytes)}) [{status}]");
+
+  public virtual void ReportDryRunNotification(bool wouldSend, string[] recipients)
+  {
+    if (wouldSend)
+      Console.WriteLine($"  ✉ Would send email to: {string.Join(", ", recipients)}");
+    else
+      Console.WriteLine("  ✉ No email would be sent.");
+  }
+
   protected static string FormatSize(long bytes) => bytes switch {
     < 1024 => $"{bytes} B",
     < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",

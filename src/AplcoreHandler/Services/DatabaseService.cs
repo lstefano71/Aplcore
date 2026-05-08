@@ -66,6 +66,25 @@ public sealed class DatabaseService : IDisposable
     return toProcess;
   }
 
+  /// <summary>Builds the shipment identity key from archive path, size, and last-modified time.</summary>
+  public static string BuildShipmentKey(string zipPath, long size, DateTime lastModifiedUtc) =>
+      $"{NormalizePath(zipPath)}|{size}|{lastModifiedUtc:O}";
+
+  /// <summary>Returns true if this specific archive (by path+size+timestamp) has already been shipped.</summary>
+  public static bool IsShipped(AplcoreDb db, string zipPath, long size, DateTime lastModifiedUtc) =>
+      db.Shipments.ContainsKey(BuildShipmentKey(zipPath, size, lastModifiedUtc));
+
+  /// <summary>Records a successful shipment. Call Save() after to persist.</summary>
+  public static void RecordShipped(AplcoreDb db, string zipPath, long size, DateTime lastModifiedUtc)
+  {
+    var key = BuildShipmentKey(zipPath, size, lastModifiedUtc);
+    db.Shipments[key] = new ShipmentEntry {
+      Size = size,
+      LastModifiedUtc = lastModifiedUtc,
+      ShippedAtUtc = DateTime.UtcNow
+    };
+  }
+
   public void RecordProcessed(AplcoreDb db, FileInfo file)
   {
     var key = NormalizePath(file.FullName);

@@ -62,7 +62,10 @@ public record AppConfig(
     string TargetDirectory,
     string FilePattern = "aplcore*",
     string ZipNameTemplate = "{timestamp}_{label}_{name}_d{major}.{minor}.{revision}"
-);
+) {
+    public SftpConfig? Sftp { get; init; }
+    public SmtpConfig? Smtp { get; init; }
+}
 
 public sealed class DbEntry
 {
@@ -70,9 +73,17 @@ public sealed class DbEntry
   public required DateTime LastModifiedUtc { get; set; }
 }
 
+public sealed class ShipmentEntry
+{
+  public required long Size { get; set; }
+  public required DateTime LastModifiedUtc { get; set; }
+  public required DateTime ShippedAtUtc { get; set; }
+}
+
 public sealed class AplcoreDb
 {
   public Dictionary<string, DbEntry> Entries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+  public Dictionary<string, ShipmentEntry> Shipments { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -101,8 +112,32 @@ public sealed class TrailerData
 /// <summary>A discovered aplcore file paired with the label of its source directory.</summary>
 public sealed record DiscoveredFile(FileInfo File, string Label);
 
+public record SftpConfig(
+    string Host,
+    int Port = 22,
+    string Username = "",
+    string Password = "",
+    string RemotePath = "/"
+);
+
+public record SmtpConfig(
+    string Host,
+    int Port = 587,
+    string Username = "",
+    string Password = "",
+    string FromAddress = "",
+    string? FromDisplayName = null,
+    bool UseSsl = true
+) {
+    public string[] To { get; init; } = [];
+    public string[]? Cc { get; init; }
+}
+
 [JsonSerializable(typeof(AppConfig))]
+[JsonSerializable(typeof(SftpConfig))]
+[JsonSerializable(typeof(SmtpConfig))]
 [JsonSerializable(typeof(AplcoreDb))]
+[JsonSerializable(typeof(ShipmentEntry))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

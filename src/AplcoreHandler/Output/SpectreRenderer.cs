@@ -105,6 +105,58 @@ public sealed class SpectreRenderer : IOutputRenderer
       AnsiConsole.MarkupLineInterpolated(
           $"  [grey]→[/] {Markup.Escape(Path.GetFileName(filePath))} [grey]({FormatSize(sizeBytes)})[/] [blue][[{Markup.Escape(reason)}]][/]");
 
+  public void ReportTransferStart(int fileCount) =>
+      AnsiConsole.MarkupLineInterpolated($"[blue]Uploading[/] {fileCount} file(s) via SFTP...");
+
+  public void ReportTransferProgress(string fileName, long sizeBytes, int current, int total) =>
+      AnsiConsole.MarkupLineInterpolated(
+          $"  [grey][[{current}/{total}]][/] [white]{Markup.Escape(fileName)}[/] [grey]({FormatSize(sizeBytes)})[/]");
+
+  public void ReportTransferResult(string fileName, string outcome)
+  {
+    var escaped = Markup.Escape(fileName);
+    var line = outcome switch {
+      "uploaded" => $"  [green]✓[/] {escaped}: {Markup.Escape(outcome)}",
+      "skipped" => $"  [yellow]✓[/] {escaped}: {Markup.Escape(outcome)}",
+      _ => $"  [red]✗[/] {escaped}: {Markup.Escape(outcome)}"
+    };
+    AnsiConsole.MarkupLine(line);
+  }
+
+  public void ReportTransferSummary(int uploaded, int skipped, int failed)
+  {
+    AnsiConsole.WriteLine();
+
+    var table = new Table()
+        .Border(TableBorder.Rounded)
+        .Title("[green]TRANSFER SUMMARY[/]")
+        .AddColumn("Metric")
+        .AddColumn("Value");
+
+    table.AddRow("Uploaded", uploaded.ToString());
+    table.AddRow("Skipped", skipped.ToString());
+    table.AddRow("Failed", failed > 0 ? $"[red]{failed}[/]" : failed.ToString());
+
+    AnsiConsole.Write(table);
+  }
+
+  public void ReportNotificationSent(string[] recipients) =>
+      AnsiConsole.MarkupLineInterpolated(
+          $"  [green]✉[/] Email sent to: {Markup.Escape(string.Join(", ", recipients))}");
+
+  public void ReportDryRunTransferItem(string fileName, long sizeBytes, string status) =>
+      AnsiConsole.MarkupLineInterpolated(
+          $"  [grey]→[/] {Markup.Escape(fileName)} [grey]({FormatSize(sizeBytes)})[/] [blue][[{Markup.Escape(status)}]][/]");
+
+  public void ReportDryRunNotification(bool wouldSend, string[] recipients)
+  {
+    if (wouldSend)
+      AnsiConsole.MarkupLineInterpolated(
+          $"  [yellow]✉[/] Would send email to: {Markup.Escape(string.Join(", ", recipients))}");
+    else
+      AnsiConsole.MarkupLine("  [grey]✉[/] No email would be sent.");
+  }
+
   private static string FormatSize(long bytes) => bytes switch {
     < 1024 => $"{bytes} B",
     < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",

@@ -15,7 +15,25 @@ AplcoreHandler is configured via a JSON file. By default it looks for `aplcore_c
   ],
   "targetDirectory": "D:\\archive\\aplcores",
   "filePattern": "aplcore*",
-  "zipNameTemplate": "{timestamp}_{label}_{name}_d{major}.{minor}.{revision}"
+  "zipNameTemplate": "{timestamp}_{label}_{name}_d{major}.{minor}.{revision}",
+  "sftp": {
+    "host": "sftp.example.com",
+    "port": 22,
+    "username": "deployer",
+    "password": "",
+    "remotePath": "/uploads/aplcores"
+  },
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "username": "notifications@example.com",
+    "password": "",
+    "fromAddress": "aplcore@example.com",
+    "fromDisplayName": "AplcoreHandler",
+    "to": ["ops-team@example.com"],
+    "cc": ["alerts@example.com"],
+    "useSsl": true
+  }
 }
 ```
 
@@ -25,6 +43,45 @@ AplcoreHandler is configured via a JSON file. By default it looks for `aplcore_c
 | `targetDirectory` | `string` | Yes | — | Where to write zip archives and the tracking database |
 | `filePattern` | `string` | No | `aplcore*` | Glob pattern for matching files |
 | `zipNameTemplate` | `string` | No | `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}` | Template for zip file names (see below) |
+
+### SFTP Configuration (optional)
+
+The `sftp` block enables automatic upload of zip archives to a remote SFTP server after archival. If omitted, the shipment phase is skipped.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `host` | `string` | Yes | — | SFTP server hostname |
+| `port` | `int` | No | `22` | SFTP server port |
+| `username` | `string` | Yes | — | SFTP login username |
+| `password` | `string` | No | `""` | SFTP password (prefer env var `APLCORE_SFTP_PASSWORD`) |
+| `remotePath` | `string` | No | `"/"` | Remote directory for uploads |
+
+### SMTP Configuration (optional)
+
+The `smtp` block enables email notifications after successful SFTP shipments. If omitted, no email is sent. Email is only sent when at least one file is successfully uploaded.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `host` | `string` | Yes | — | SMTP server hostname |
+| `port` | `int` | No | `587` | SMTP server port |
+| `username` | `string` | No | `""` | SMTP login username |
+| `password` | `string` | No | `""` | SMTP password (prefer env var `APLCORE_SMTP_PASSWORD`) |
+| `fromAddress` | `string` | Yes | — | Sender email address |
+| `fromDisplayName` | `string` | No | `null` | Sender display name |
+| `to` | `string[]` | Yes | — | Primary recipient email addresses |
+| `cc` | `string[]` | No | `null` | CC recipient email addresses |
+| `useSsl` | `bool` | No | `true` | Use STARTTLS for SMTP connection |
+
+### Credential Management
+
+Passwords can be set in config or via environment variables. **Environment variables always take precedence** over config values.
+
+| Environment Variable | Overrides |
+|---------------------|-----------|
+| `APLCORE_SFTP_PASSWORD` | `sftp.password` |
+| `APLCORE_SMTP_PASSWORD` | `smtp.password` |
+
+This allows keeping secrets out of config files in CI/CD and production environments.
 
 ### Source Directory Labels
 
@@ -115,6 +172,30 @@ For each file to archive:
    - The three metadata files
 4. **Database update** — the DB is saved after each successful archive (crash-safe)
 
+### SFTP Shipment
+
+After archival (or on every run if archives exist from prior runs), the tool uploads unshipped zip archives to the configured SFTP server:
+
+1. **Eligibility** — all `.zip` files in the target directory are candidates. The tool checks each against the shipment ledger in the database.
+2. **Shipment identity** — a file is identified by its normalized path + size + last-modified timestamp. If any of these change (e.g., re-generated archive), it becomes eligible again.
+3. **Conflict handling** — if a remote file with the same name already exists:
+   - Same size → treated as already shipped (skip, mark confirmed in DB)
+   - Different size → reported as an error
+4. **Retry** — transient upload failures are retried 3 times with exponential backoff (1s, 2s, 4s).
+5. **Crash safety** — the database is saved after each successful upload, so interrupted runs don't re-upload confirmed files.
+6. **Backlog** — unshipped archives from previous runs are automatically included. This clears any backlog without manual intervention.
+
+### Email Notification
+
+After SFTP shipment, the tool sends a summary email if at least one upload succeeded:
+
+- **Trigger** — email is sent only when `uploaded > 0`. If all files were skipped or failed, no email is sent.
+- **Format** — plain text with totals (uploaded, skipped, failed) plus bounded file-level details:
+  - First 20 shipped files
+  - First 10 failed files (with error messages)
+  - Truncated with "and N more…" if limits are exceeded
+- **Recipients** — configured via `to` (required) and `cc` (optional) arrays in the SMTP config.
+
 ### Zip Naming
 
 Archives are named using the `zipNameTemplate` from the config (default: `{timestamp}_{label}_{name}_d{major}.{minor}.{revision}`). With no label and a known version this produces `yyyyMMdd_HHmmss_<filename>_d<major>.<minor>.<revision>.zip`.
@@ -146,7 +227,7 @@ AplcoreHandler [config-path] [options]
 
 | Option | Description |
 |--------|-------------|
-| `--dry-run` | Scan and report what would be archived, without creating any files |
+| `--dry-run` | Scan and report what would be archived and uploaded, without creating files or network activity |
 | `--ci` | Force non-interactive output (no ANSI codes, no progress bars) |
 | `--help`, `-h` | Show usage information |
 
@@ -169,6 +250,27 @@ Found 5 file(s), 2 to process.
   Errors:   0
 ```
 
+With SFTP configured, dry run also previews what would be uploaded:
+
+```
+> AplcoreHandler.exe config.json --dry-run --ci
+
+AplcoreHandler v0.1.42
+Scanning 2 source directories...
+Found 5 file(s), 2 to process.
+  → aplcore_15 (423.7 MB) [new]
+  → aplcore_10 (614.2 MB) [changed]
+
+=== DRY RUN SUMMARY ===
+  Archived: 0
+  Skipped:  0
+  Errors:   0
+  → archive_001.zip (150.2 MB) [would-upload]
+  → archive_002.zip (200.5 MB) [would-upload]
+  → archive_003.zip (180.1 MB) [already-shipped]
+  ✉ Email would be sent to: ops-team@example.com, alerts@example.com
+```
+
 ## TeamCity Integration
 
 ### Automatic Detection
@@ -187,6 +289,10 @@ When the `TEAMCITY_VERSION` environment variable is set (standard in all TeamCit
 | `##teamcity[buildStatisticValue key='AplcoreHandler.Errors' value='N']` | In summary |
 | `##teamcity[message text='...' status='WARNING']` | On warnings |
 | `##teamcity[message text='...' status='ERROR']` | On errors |
+| `##teamcity[progressMessage '...']` | During each file upload |
+| `##teamcity[buildStatisticValue key='AplcoreHandler.Uploaded' value='N']` | In transfer summary |
+| `##teamcity[buildStatisticValue key='AplcoreHandler.TransferSkipped' value='N']` | In transfer summary |
+| `##teamcity[buildStatisticValue key='AplcoreHandler.TransferFailed' value='N']` | In transfer summary |
 
 ### TeamCity Job Setup
 
@@ -223,3 +329,22 @@ The file is held open by another process (e.g., the Dyalog runtime is still writ
 Check if:
 - The file's timestamp is changing between runs (another process modifying it)
 - Path normalization issues (different casing or relative/absolute variations in config)
+
+### "SFTP connection failed"
+
+The tool could not connect to the SFTP server. Check:
+- The `host` and `port` values in the `sftp` config block
+- Network connectivity and firewall rules
+- That the username and password (or `APLCORE_SFTP_PASSWORD` env var) are correct
+
+### "Remote file exists with different size"
+
+A file with the same name but a different size already exists on the SFTP server. This indicates a data mismatch — the archive may have been regenerated locally. Remove or rename the remote file to allow re-upload.
+
+### "Email notification failed"
+
+The SMTP send failed. Check:
+- The `host`, `port`, and `useSsl` settings match your mail server
+- Credentials are correct (check `APLCORE_SMTP_PASSWORD` env var)
+- The `fromAddress` is authorized to send via your SMTP server
+- Firewall allows outbound connections to the SMTP port

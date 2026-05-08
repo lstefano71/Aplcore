@@ -14,6 +14,9 @@ A CLI tool that automatically discovers, catalogs, and archives [Dyalog APL](htt
 - **TeamCity integration** — auto-detects TeamCity, emits service messages with build statistics
 - **AOT-compiled** — single self-contained `.exe`, no .NET runtime required
 - **Crash-safe** — advisory file locking, incremental DB saves, partial zip cleanup
+- **SFTP shipment** — uploads unshipped zip archives to a remote SFTP server with retry, conflict detection, and backlog clearing
+- **Email notifications** — sends a bounded plain-text shipment summary email after successful uploads
+- **Credential management** — passwords from config or environment variables (`APLCORE_SFTP_PASSWORD`, `APLCORE_SMTP_PASSWORD`), env vars take precedence
 
 ## Quick Start
 
@@ -28,7 +31,19 @@ A CLI tool that automatically discovers, catalogs, and archives [Dyalog APL](htt
     { "path": "D:\\dumps", "label": "Production" }
   ],
   "targetDirectory": "D:\\archive",
-  "filePattern": "aplcore*"
+  "filePattern": "aplcore*",
+  "sftp": {
+    "host": "sftp.example.com",
+    "username": "deployer",
+    "remotePath": "/uploads/aplcores"
+  },
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "fromAddress": "aplcore@example.com",
+    "to": ["ops-team@example.com"],
+    "cc": ["alerts@example.com"]
+  }
 }
 ```
 
@@ -47,10 +62,18 @@ Arguments:
   config-path    Path to JSON config file (default: aplcore_config.json)
 
 Options:
-  --dry-run      Scan and report without archiving
+  --dry-run      Scan and report without archiving or uploading
   --ci           Force non-interactive output mode
   --help, -h     Show this help
 ```
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `APLCORE_SFTP_PASSWORD` | Override SFTP password from config |
+| `APLCORE_SMTP_PASSWORD` | Override SMTP password from config |
+| `TEAMCITY_VERSION` | Auto-detected for TeamCity output mode |
 
 ### Examples
 
@@ -92,8 +115,8 @@ When version cannot be extracted the metadata file falls back to `metadata.txt`.
 
 | Code | Meaning |
 |------|---------|
-| 0 | All files processed successfully |
-| 1 | Some files skipped due to errors |
+| 0 | All operations succeeded (archive, upload, email) |
+| 1 | At least one archive, upload, or email operation failed |
 | 2 | Fatal error (bad config, DB lock failure) |
 
 ## Building from Source
@@ -109,6 +132,9 @@ dotnet publish src/AplcoreHandler/AplcoreHandler.csproj -c Release -o publish
 
 # Run
 ./publish/AplcoreHandler.exe --help
+
+# Run tests
+dotnet test
 ```
 
 ## Versioning

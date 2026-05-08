@@ -46,17 +46,18 @@ public sealed class ArchivePipeline
 
     if (toProcess.Count == 0) {
       _output.ReportSummary(0, 0, 0, 0, 0, _dryRun);
-      return 0;
+      // Even if no new archives, still run shipment for backlog
+      return RunPostArchivePhases(db, dbService, targetDirFull, archiveErrors: 0);
     }
 
     // Phase 3: Dry run or archive
     if (_dryRun)
-      return RunDryRun(db, toProcess);
+      return RunDryRun(db, dbService, toProcess, targetDirFull);
 
-    return RunArchive(db, dbService, toProcess);
+    return RunArchive(db, dbService, toProcess, targetDirFull);
   }
 
-  private int RunDryRun(AplcoreDb db, List<DiscoveredFile> toProcess)
+  private int RunDryRun(AplcoreDb db, DatabaseService dbService, List<DiscoveredFile> toProcess, string targetDirFull)
   {
     long totalSourceBytes = 0;
     foreach (var item in toProcess) {
@@ -67,10 +68,12 @@ public sealed class ArchivePipeline
     }
 
     _output.ReportSummary(0, 0, 0, totalSourceBytes, 0, dryRun: true);
-    return 0;
+
+    // Dry-run shipment + notification phases
+    return RunPostArchivePhases(db, dbService, targetDirFull, archiveErrors: 0);
   }
 
-  private int RunArchive(AplcoreDb db, DatabaseService dbService, List<DiscoveredFile> toProcess)
+  private int RunArchive(AplcoreDb db, DatabaseService dbService, List<DiscoveredFile> toProcess, string targetDirFull)
   {
     int archived = 0, skipped = 0, errors = 0;
     long totalSourceBytes = 0, totalZipBytes = 0;
@@ -125,7 +128,44 @@ public sealed class ArchivePipeline
 
     _output.ReportSummary(archived, skipped, errors, totalSourceBytes, totalZipBytes, dryRun: false);
 
-    // Exit code: 0=all OK, 1=some skipped/errors
-    return errors > 0 ? 1 : 0;
+    // Post-archive phases (shipment + notification)
+    var postExitCode = RunPostArchivePhases(db, dbService, targetDirFull, archiveErrors: errors);
+
+    // Aggregate exit codes: worst wins
+    return Math.Max(errors > 0 ? 1 : 0, postExitCode);
+  }
+
+  private int RunPostArchivePhases(AplcoreDb db, DatabaseService dbService, string targetDirFull, int archiveErrors)
+  {
+    int exitCode = archiveErrors > 0 ? 1 : 0;
+
+    // Phase 4: SFTP Shipment (if configured)
+    if (_config.Sftp is not null) {
+      var sftpPassword = ConfigResolver.ResolveEffectiveSftpPassword(_config.Sftp);
+
+      // Collect all zip files in target directory
+      var zipFiles = Directory.GetFiles(targetDirFull, "*.zip")
+          .Select(f => new FileInfo(f))
+          .OrderBy(f => f.LastWriteTimeUtc)
+          .ToList();
+
+      var sftpService = new SftpTransferService(_config.Sftp, sftpPassword, _output);
+      var transferResult = sftpService.UploadAll(zipFiles, db, dbService, _dryRun);
+
+      if (transferResult.Failed.Count > 0)
+        exitCode = Math.Max(exitCode, 1);
+
+      // Phase 5: Email Notification (if configured and at least one upload succeeded)
+      if (_config.Smtp is not null) {
+        var smtpPassword = ConfigResolver.ResolveEffectiveSmtpPassword(_config.Smtp);
+        var emailSent = NotificationService.SendIfNeeded(
+            _config.Smtp, smtpPassword, transferResult, _output, _dryRun);
+
+        if (!_dryRun && transferResult.Uploaded.Count > 0 && !emailSent)
+          exitCode = Math.Max(exitCode, 1);
+      }
+    }
+
+    return exitCode;
   }
 }

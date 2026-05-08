@@ -31,6 +31,21 @@ public sealed class TeamCityRenderer : PlainRenderer
     EmitServiceMessage("message", Escape(message), "ERROR");
   }
 
+  public override void ReportTransferProgress(string fileName, long sizeBytes, int current, int total)
+  {
+    base.ReportTransferProgress(fileName, sizeBytes, current, total);
+    EmitServiceMessage("progressMessage", $"Uploading {Escape(fileName)} ({current}/{total})");
+  }
+
+  public override void ReportTransferSummary(int uploaded, int skipped, int failed)
+  {
+    base.ReportTransferSummary(uploaded, skipped, failed);
+
+    EmitStatistic("AplcoreHandler.Uploaded", uploaded);
+    EmitStatistic("AplcoreHandler.TransferSkipped", skipped);
+    EmitStatistic("AplcoreHandler.TransferFailed", failed);
+  }
+
   private static void EmitServiceMessage(string type, string value, string? status = null)
   {
     if (status is not null)

@@ -8,20 +8,25 @@ A technical reference for future maintainers.
 src/AplcoreHandler/
 ├── Program.cs                      # Entry point, CLI parsing, renderer selection
 ├── Models/
-│   └── Models.cs                   # AppConfig, DbEntry, AplcoreDb, TrailerData, JsonContext
+│   └── Models.cs                   # AppConfig, SftpConfig, SmtpConfig, DbEntry, ShipmentEntry, AplcoreDb, JsonContext
 ├── Services/
 │   ├── FileDiscoveryService.cs     # Glob-based recursive file scanning
-│   ├── DatabaseService.cs          # JSON DB load/save, locking, change detection
+│   ├── DatabaseService.cs          # JSON DB load/save, locking, change detection, shipment ledger
 │   ├── TrailerExtractor.cs         # Binary seek-from-end trailer reading
 │   ├── MetadataSplitter.cs         # Split trailer into metadata/address_space/apl_stack
-│   └── ArchiveService.cs           # Zip creation with streaming
+│   ├── ArchiveService.cs           # Zip creation with streaming
+│   ├── ConfigResolver.cs           # Credential resolution (env var > config) and validation
+│   ├── SftpTransferService.cs      # SFTP upload with retry, conflict detection, backlog clearing
+│   └── NotificationService.cs      # Email summary generation and SMTP delivery
 ├── Output/
 │   ├── IOutputRenderer.cs          # Output abstraction interface
 │   ├── PlainRenderer.cs            # Console.WriteLine plain text
 │   ├── TeamCityRenderer.cs         # Plain + ##teamcity[] service messages
 │   └── SpectreRenderer.cs          # Rich Spectre.Console UI
 └── Pipeline/
-    └── ArchivePipeline.cs          # Orchestrator: discover → detect → extract → archive
+    └── ArchivePipeline.cs          # Orchestrator: discover → detect → archive → ship → notify
+tests/AplcoreHandler.Tests/
+└── *.cs                            # xUnit tests for config, ledger, notification
 ```
 
 ## Key Design Decisions
@@ -55,6 +60,8 @@ JsonSerializer.Deserialize(json, AppJsonContext.Default.AppConfig);
 JsonSerializer.Serialize(db);
 JsonSerializer.Deserialize<AppConfig>(json);
 ```
+
+New types added for shipment — `SftpConfig`, `SmtpConfig`, `ShipmentEntry` — are all registered in `AppJsonContext`.
 
 ### No Reflection
 Avoid any APIs that rely on `System.Reflection.Emit` or dynamic type generation. The codebase uses no reflection.
@@ -138,6 +145,69 @@ If a new section needs to be extracted from the trailer:
 2. **TrailerData** (Models.cs) — add a new `required string` property
 3. **ArchiveService.cs** — add `AddTextEntry(archive, "new_section.txt", trailer.NewSection)`
 4. Update documentation
+
+## SFTP Shipment & Email Notification
+
+### Pipeline Extension
+
+The pipeline was extended from `discover → detect → archive` to `discover → detect → archive → ship → notify`. The post-archive phases run even when no new archives were created (to clear any backlog of unshipped files).
+
+### Shipment Ledger
+
+Shipment state is stored in the same `AplcoreDb` JSON file alongside archive tracking entries:
+
+```json
+{
+  "entries": { "...": { "size": 123, "lastModifiedUtc": "..." } },
+  "shipments": {
+    "C:\\archive\\file.zip|1234|2026-05-01T12:00:00.0000000Z": {
+      "size": 1234,
+      "lastModifiedUtc": "2026-05-01T12:00:00Z",
+      "shippedAtUtc": "2026-05-01T12:05:00Z"
+    }
+  }
+}
+```
+
+The shipment identity key is `normalizedPath|size|lastModifiedUtc` (ISO 8601). This means:
+- Renaming a file → re-eligible (different path)
+- Regenerating an archive → re-eligible (different size or timestamp)
+- Same file unchanged → skip (idempotent)
+
+### Credential Resolution
+
+`ConfigResolver` implements a simple precedence rule: **environment variable wins over config value**.
+
+| Config field | Environment variable |
+|---|---|
+| `sftp.password` | `APLCORE_SFTP_PASSWORD` |
+| `smtp.password` | `APLCORE_SMTP_PASSWORD` |
+
+This keeps secrets out of config files in CI/CD pipelines. The resolver also validates required fields at startup (exit code 2 on validation failure).
+
+### SFTP Conflict Policy
+
+When a remote file with the same name already exists:
+- **Same size** → treated as already shipped (recorded in ledger, no re-upload)
+- **Different size** → reported as an error (possible data mismatch)
+
+This ensures idempotent behavior: re-running after a partial failure skips already-confirmed uploads.
+
+### Email Summary Bounds
+
+To keep emails readable, the notification body is bounded:
+- First 20 shipped file names
+- First 10 failed file names with error messages
+- Exceeded items shown as "and N more…"
+
+### Dependencies
+
+| Package | Purpose | AOT Compatible |
+|---------|---------|----------------|
+| [SSH.NET](https://github.com/sshnet/SSH.NET) (Renci.SshNet) | SFTP file transfer | Yes |
+| [MailKit](https://github.com/jstedfast/MailKit) | SMTP email delivery | Yes |
+
+Both are MIT-licensed. Password authentication only (no SSH key auth in v1).
 
 ## Versioning
 
