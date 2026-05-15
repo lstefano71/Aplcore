@@ -1,5 +1,6 @@
 using AplcoreHandler.Models;
 using AplcoreHandler.Output;
+using AplcoreHandler.Formatting;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
@@ -35,7 +36,7 @@ public static class NotificationService
 
         try {
             var body = BuildSummaryBody(transferResult);
-            SendEmail(config, effectivePassword, "AplcoreHandler Shipment Summary", body);
+            SendEmail(config, effectivePassword, BuildSubject(transferResult.Uploaded.Count), body);
             output.ReportNotificationSent(allRecipients);
             return true;
         } catch (Exception ex) {
@@ -48,6 +49,12 @@ public static class NotificationService
     /// Builds a bounded plain-text summary body.
     /// Shows first 20 shipped items + first 10 failed items, then truncates.
     /// </summary>
+    public static string BuildSubject(int uploadedCount)
+    {
+        var noun = uploadedCount == 1 ? "file" : "files";
+        return $"AplcoreHandler: {uploadedCount} {noun} shipped";
+    }
+
     public static string BuildSummaryBody(TransferResult result)
     {
         var sb = new System.Text.StringBuilder();
@@ -67,7 +74,7 @@ public static class NotificationService
             sb.AppendLine("Shipped files:");
             var shownCount = Math.Min(result.Uploaded.Count, MaxShippedItems);
             for (int i = 0; i < shownCount; i++)
-                sb.AppendLine($"  ✓ {result.Uploaded[i]}");
+                sb.AppendLine($"  ✓ {result.Uploaded[i].Name} ({ByteSizeFormatter.Format(result.Uploaded[i].SizeBytes)})");
             if (result.Uploaded.Count > MaxShippedItems)
                 sb.AppendLine($"  ... and {result.Uploaded.Count - MaxShippedItems} more");
             sb.AppendLine();
@@ -78,14 +85,13 @@ public static class NotificationService
             sb.AppendLine("Failed files:");
             var shownCount = Math.Min(result.Failed.Count, MaxFailedItems);
             for (int i = 0; i < shownCount; i++)
-                sb.AppendLine($"  ✗ {result.Failed[i].File}: {result.Failed[i].Error}");
+                sb.AppendLine($"  ✗ {result.Failed[i].Name} ({ByteSizeFormatter.Format(result.Failed[i].SizeBytes)}): {result.Failed[i].Error}");
             if (result.Failed.Count > MaxFailedItems)
                 sb.AppendLine($"  ... and {result.Failed.Count - MaxFailedItems} more");
             sb.AppendLine();
         }
 
         sb.AppendLine($"Timestamp: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-        sb.AppendLine($"Host:      {Environment.MachineName}");
 
         return sb.ToString();
     }

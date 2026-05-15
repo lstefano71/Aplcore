@@ -5,11 +5,14 @@ using Renci.SshNet;
 namespace AplcoreHandler.Services;
 
 /// <summary>Result of a batch transfer operation.</summary>
+public sealed record TransferArchive(string Name, long SizeBytes);
+public sealed record FailedTransferArchive(string Name, long SizeBytes, string Error);
+
 public sealed class TransferResult
 {
-    public List<string> Uploaded { get; } = [];
-    public List<string> Skipped { get; } = [];
-    public List<(string File, string Error)> Failed { get; } = [];
+    public List<TransferArchive> Uploaded { get; } = [];
+    public List<TransferArchive> Skipped { get; } = [];
+    public List<FailedTransferArchive> Failed { get; } = [];
 }
 
 public sealed class SftpTransferService
@@ -68,7 +71,7 @@ public sealed class SftpTransferService
         } catch (Exception ex) {
             _output.ReportError($"SFTP connection failed: {ex.Message}");
             foreach (var zip in eligible)
-                result.Failed.Add((zip.Name, ex.Message));
+                result.Failed.Add(new FailedTransferArchive(zip.Name, zip.Length, ex.Message));
             _output.ReportTransferSummary(result.Uploaded.Count, result.Skipped.Count, result.Failed.Count);
             return result;
         }
@@ -88,14 +91,14 @@ public sealed class SftpTransferService
 
                     switch (outcome) {
                         case UploadOutcome.Uploaded:
-                            result.Uploaded.Add(zip.Name);
+                            result.Uploaded.Add(new TransferArchive(zip.Name, zip.Length));
                             _output.ReportTransferResult(zip.Name, "uploaded");
                             // Crash-safe: record + save after each successful upload
                             DatabaseService.RecordShipped(db, zip.FullName, zip.Length, zip.LastWriteTimeUtc);
                             dbService.Save(db);
                             break;
                         case UploadOutcome.SkippedSameSize:
-                            result.Skipped.Add(zip.Name);
+                            result.Skipped.Add(new TransferArchive(zip.Name, zip.Length));
                             _output.ReportTransferResult(zip.Name, "skipped");
                             // Treat remote-exists-same-size as confirmed
                             DatabaseService.RecordShipped(db, zip.FullName, zip.Length, zip.LastWriteTimeUtc);
@@ -103,13 +106,13 @@ public sealed class SftpTransferService
                             break;
                         case UploadOutcome.ErrorSizeMismatch:
                             var msg = "Remote file exists with different size";
-                            result.Failed.Add((zip.Name, msg));
+                            result.Failed.Add(new FailedTransferArchive(zip.Name, zip.Length, msg));
                             _output.ReportTransferResult(zip.Name, "error");
                             _output.ReportError($"{zip.Name}: {msg}");
                             break;
                     }
                 } catch (Exception ex) {
-                    result.Failed.Add((zip.Name, ex.Message));
+                    result.Failed.Add(new FailedTransferArchive(zip.Name, zip.Length, ex.Message));
                     _output.ReportTransferResult(zip.Name, "error");
                     _output.ReportError($"Upload failed for {zip.Name}: {ex.Message}");
                 }

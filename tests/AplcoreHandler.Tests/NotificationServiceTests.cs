@@ -8,16 +8,17 @@ public class NotificationServiceTests
     public void BuildSummaryBody_IncludesTotals()
     {
         var result = new TransferResult();
-        result.Uploaded.Add("file1.zip");
-        result.Uploaded.Add("file2.zip");
-        result.Failed.Add(("file3.zip", "connection lost"));
+        result.Uploaded.Add(new TransferArchive("file1.zip", 1024));
+        result.Uploaded.Add(new TransferArchive("file2.zip", 2 * 1024 * 1024));
+        result.Failed.Add(new FailedTransferArchive("file3.zip", 1536, "connection lost"));
 
         var body = NotificationService.BuildSummaryBody(result);
 
         Assert.Contains("Uploaded:  2", body);
         Assert.Contains("Failed:    1", body);
-        Assert.Contains("file1.zip", body);
-        Assert.Contains("file3.zip", body);
+        Assert.Contains("file1.zip (1.0 KB)", body);
+        Assert.Contains("file2.zip (2.0 MB)", body);
+        Assert.Contains("file3.zip (1.5 KB)", body);
         Assert.Contains("connection lost", body);
     }
 
@@ -26,7 +27,7 @@ public class NotificationServiceTests
     {
         var result = new TransferResult();
         for (int i = 1; i <= 25; i++)
-            result.Uploaded.Add($"file{i}.zip");
+            result.Uploaded.Add(new TransferArchive($"file{i}.zip", i));
 
         var body = NotificationService.BuildSummaryBody(result);
 
@@ -39,9 +40,9 @@ public class NotificationServiceTests
     public void BuildSummaryBody_TruncatesFailedAt10()
     {
         var result = new TransferResult();
-        result.Uploaded.Add("trigger.zip"); // need at least one upload
+        result.Uploaded.Add(new TransferArchive("trigger.zip", 1024)); // need at least one upload
         for (int i = 1; i <= 15; i++)
-            result.Failed.Add(($"fail{i}.zip", "error"));
+            result.Failed.Add(new FailedTransferArchive($"fail{i}.zip", i, "error"));
 
         var body = NotificationService.BuildSummaryBody(result);
 
@@ -54,7 +55,7 @@ public class NotificationServiceTests
     public void BuildSummaryBody_NoShipped_OmitsShippedSection()
     {
         var result = new TransferResult();
-        result.Failed.Add(("file1.zip", "error"));
+        result.Failed.Add(new FailedTransferArchive("file1.zip", 1024, "error"));
 
         var body = NotificationService.BuildSummaryBody(result);
 
@@ -66,7 +67,7 @@ public class NotificationServiceTests
     public void BuildSummaryBody_NoFailed_OmitsFailedSection()
     {
         var result = new TransferResult();
-        result.Uploaded.Add("file1.zip");
+        result.Uploaded.Add(new TransferArchive("file1.zip", 1024));
 
         var body = NotificationService.BuildSummaryBody(result);
 
@@ -75,15 +76,15 @@ public class NotificationServiceTests
     }
 
     [Fact]
-    public void BuildSummaryBody_IncludesTimestampAndHost()
+    public void BuildSummaryBody_IncludesTimestampButOmitsHost()
     {
         var result = new TransferResult();
-        result.Uploaded.Add("file1.zip");
+        result.Uploaded.Add(new TransferArchive("file1.zip", 1024));
 
         var body = NotificationService.BuildSummaryBody(result);
 
         Assert.Contains("Timestamp:", body);
-        Assert.Contains("Host:", body);
+        Assert.DoesNotContain("Host:", body);
     }
 
     [Fact]
@@ -91,11 +92,19 @@ public class NotificationServiceTests
     {
         var result = new TransferResult();
         for (int i = 1; i <= 20; i++)
-            result.Uploaded.Add($"file{i}.zip");
+            result.Uploaded.Add(new TransferArchive($"file{i}.zip", i));
 
         var body = NotificationService.BuildSummaryBody(result);
 
         Assert.Contains("file20.zip", body);
         Assert.DoesNotContain("more", body);
+    }
+
+    [Theory]
+    [InlineData(1, "AplcoreHandler: 1 file shipped")]
+    [InlineData(3, "AplcoreHandler: 3 files shipped")]
+    public void BuildSubject_UsesUploadedCount(int uploadedCount, string expected)
+    {
+        Assert.Equal(expected, NotificationService.BuildSubject(uploadedCount));
     }
 }

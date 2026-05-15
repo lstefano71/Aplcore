@@ -1,4 +1,5 @@
 using AplcoreHandler.Models;
+using AplcoreHandler.Formatting;
 
 namespace AplcoreHandler.Output;
 
@@ -34,7 +35,7 @@ public class PlainRenderer : IOutputRenderer
   {
     Console.WriteLine($"[{current}/{total}] {Path.GetFileName(filePath)}");
     Console.WriteLine($"         Path:     {filePath}");
-    Console.WriteLine($"         Size:     {FormatSize(sizeBytes)}");
+    Console.WriteLine($"         Size:     {ByteSizeFormatter.Format(sizeBytes)}");
     Console.WriteLine($"         Modified: {lastModifiedUtc:yyyy-MM-dd HH:mm:ss} UTC");
   }
 
@@ -56,8 +57,8 @@ public class PlainRenderer : IOutputRenderer
     Console.WriteLine($"  Archived:     {archived}");
     Console.WriteLine($"  Skipped:      {skipped}");
     Console.WriteLine($"  Errors:       {errors}");
-    Console.WriteLine($"  Source total:  {FormatSize(totalSourceBytes)}");
-    Console.WriteLine($"  Zip total:    {FormatSize(totalZipBytes)}");
+    Console.WriteLine($"  Source total:  {ByteSizeFormatter.Format(totalSourceBytes)}");
+    Console.WriteLine($"  Zip total:    {ByteSizeFormatter.Format(totalZipBytes)}");
     if (totalSourceBytes > 0)
       Console.WriteLine($"  Compression:  {(1.0 - (double)totalZipBytes / totalSourceBytes) * 100:F1}%");
   }
@@ -69,13 +70,13 @@ public class PlainRenderer : IOutputRenderer
       Console.Error.WriteLine($"  ✗ {message}");
 
   public virtual void ReportDryRunItem(string filePath, long sizeBytes, string reason) =>
-      Console.WriteLine($"  → {Path.GetFileName(filePath)} ({FormatSize(sizeBytes)}) [{reason}]");
+      Console.WriteLine($"  → {Path.GetFileName(filePath)} ({ByteSizeFormatter.Format(sizeBytes)}) [{reason}]");
 
   public virtual void ReportTransferStart(int fileCount) =>
       Console.WriteLine($"Uploading {fileCount} file(s) via SFTP...");
 
   public virtual void ReportTransferProgress(string fileName, long sizeBytes, int current, int total) =>
-      Console.WriteLine($"[{current}/{total}] {fileName} ({FormatSize(sizeBytes)})");
+      Console.WriteLine($"[{current}/{total}] {fileName} ({ByteSizeFormatter.Format(sizeBytes)})");
 
   public virtual void ReportTransferResult(string fileName, string outcome)
   {
@@ -96,7 +97,7 @@ public class PlainRenderer : IOutputRenderer
       Console.WriteLine($"  ✉ Email sent to: {string.Join(", ", recipients)}");
 
   public virtual void ReportDryRunTransferItem(string fileName, long sizeBytes, string status) =>
-      Console.WriteLine($"  → {fileName} ({FormatSize(sizeBytes)}) [{status}]");
+      Console.WriteLine($"  → {fileName} ({ByteSizeFormatter.Format(sizeBytes)}) [{status}]");
 
   public virtual void ReportDryRunNotification(bool wouldSend, string[] recipients)
   {
@@ -105,11 +106,4 @@ public class PlainRenderer : IOutputRenderer
     else
       Console.WriteLine("  ✉ No email would be sent.");
   }
-
-  protected static string FormatSize(long bytes) => bytes switch {
-    < 1024 => $"{bytes} B",
-    < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-    < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-    _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
-  };
 }

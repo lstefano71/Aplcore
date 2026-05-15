@@ -1,4 +1,5 @@
 using AplcoreHandler.Models;
+using AplcoreHandler.Formatting;
 
 using Spectre.Console;
 
@@ -59,7 +60,7 @@ public sealed class SpectreRenderer : IOutputRenderer
     AnsiConsole.MarkupLineInterpolated(
         $"           [grey]Path:[/]     {Markup.Escape(filePath)}");
     AnsiConsole.MarkupLineInterpolated(
-        $"           [grey]Size:[/]     {FormatSize(sizeBytes)}");
+        $"           [grey]Size:[/]     {ByteSizeFormatter.Format(sizeBytes)}");
     AnsiConsole.MarkupLineInterpolated(
         $"           [grey]Modified:[/] {lastModifiedUtc:yyyy-MM-dd HH:mm:ss} UTC");
   }
@@ -87,8 +88,8 @@ public sealed class SpectreRenderer : IOutputRenderer
     table.AddRow("Archived", archived.ToString());
     table.AddRow("Skipped", skipped.ToString());
     table.AddRow("Errors", errors > 0 ? $"[red]{errors}[/]" : errors.ToString());
-    table.AddRow("Source total", FormatSize(totalSourceBytes));
-    table.AddRow("Zip total", FormatSize(totalZipBytes));
+    table.AddRow("Source total", ByteSizeFormatter.Format(totalSourceBytes));
+    table.AddRow("Zip total", ByteSizeFormatter.Format(totalZipBytes));
     if (totalSourceBytes > 0)
       table.AddRow("Compression", $"{(1.0 - (double)totalZipBytes / totalSourceBytes) * 100:F1}%");
 
@@ -103,14 +104,14 @@ public sealed class SpectreRenderer : IOutputRenderer
 
   public void ReportDryRunItem(string filePath, long sizeBytes, string reason) =>
       AnsiConsole.MarkupLineInterpolated(
-          $"  [grey]→[/] {Markup.Escape(Path.GetFileName(filePath))} [grey]({FormatSize(sizeBytes)})[/] [blue][[{Markup.Escape(reason)}]][/]");
+          $"  [grey]→[/] {Markup.Escape(Path.GetFileName(filePath))} [grey]({ByteSizeFormatter.Format(sizeBytes)})[/] [blue][[{Markup.Escape(reason)}]][/]");
 
   public void ReportTransferStart(int fileCount) =>
       AnsiConsole.MarkupLineInterpolated($"[blue]Uploading[/] {fileCount} file(s) via SFTP...");
 
   public void ReportTransferProgress(string fileName, long sizeBytes, int current, int total) =>
       AnsiConsole.MarkupLineInterpolated(
-          $"  [grey][[{current}/{total}]][/] [white]{Markup.Escape(fileName)}[/] [grey]({FormatSize(sizeBytes)})[/]");
+          $"  [grey][[{current}/{total}]][/] [white]{Markup.Escape(fileName)}[/] [grey]({ByteSizeFormatter.Format(sizeBytes)})[/]");
 
   public void ReportTransferResult(string fileName, string outcome)
   {
@@ -146,7 +147,7 @@ public sealed class SpectreRenderer : IOutputRenderer
 
   public void ReportDryRunTransferItem(string fileName, long sizeBytes, string status) =>
       AnsiConsole.MarkupLineInterpolated(
-          $"  [grey]→[/] {Markup.Escape(fileName)} [grey]({FormatSize(sizeBytes)})[/] [blue][[{Markup.Escape(status)}]][/]");
+          $"  [grey]→[/] {Markup.Escape(fileName)} [grey]({ByteSizeFormatter.Format(sizeBytes)})[/] [blue][[{Markup.Escape(status)}]][/]");
 
   public void ReportDryRunNotification(bool wouldSend, string[] recipients)
   {
@@ -156,11 +157,4 @@ public sealed class SpectreRenderer : IOutputRenderer
     else
       AnsiConsole.MarkupLine("  [grey]✉[/] No email would be sent.");
   }
-
-  private static string FormatSize(long bytes) => bytes switch {
-    < 1024 => $"{bytes} B",
-    < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-    < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-    _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
-  };
 }

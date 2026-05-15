@@ -196,9 +196,10 @@ This ensures idempotent behavior: re-running after a partial failure skips alrea
 ### Email Summary Bounds
 
 To keep emails readable, the notification body is bounded:
-- First 20 shipped file names
-- First 10 failed file names with error messages
+- First 20 shipped file names with archive sizes
+- First 10 failed file names with archive sizes and error messages
 - Exceeded items shown as "and N more…"
+- Subject line format is `AplcoreHandler: N file(s) shipped`
 
 ### Dependencies
 

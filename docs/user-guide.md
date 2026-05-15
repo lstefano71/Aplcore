@@ -190,9 +190,10 @@ After archival (or on every run if archives exist from prior runs), the tool upl
 After SFTP shipment, the tool sends a summary email if at least one upload succeeded:
 
 - **Trigger** — email is sent only when `uploaded > 0`. If all files were skipped or failed, no email is sent.
+- **Subject** — `AplcoreHandler: N file(s) shipped`
 - **Format** — plain text with totals (uploaded, skipped, failed) plus bounded file-level details:
-  - First 20 shipped files
-  - First 10 failed files (with error messages)
+  - First 20 shipped files with archive sizes
+  - First 10 failed files with archive sizes and error messages
   - Truncated with "and N more…" if limits are exceeded
 - **Recipients** — configured via `to` (required) and `cc` (optional) arrays in the SMTP config.
 

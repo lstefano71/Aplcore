@@ -64,7 +64,8 @@ From the user’s perspective:
 - Use `MailKit` (MIT) for SMTP email delivery.
 - SMTP default security mode is STARTTLS / port 587 (overridable by config).
 - Email is sent only if at least one upload succeeds.
-- Email body is plain text and bounded: include totals + first 20 shipped items + first 10 failed items, then truncate with “and N more…”.
+- Email subject is `AplcoreHandler: N file(s) shipped`.
+- Email body is plain text and bounded: include totals + first 20 shipped items with archive sizes + first 10 failed items with archive sizes and error messages, then truncate with “and N more…”. Omit host metadata.
 - Recipient model includes To and Cc.
 - Sender model requires `fromAddress`; `fromDisplayName` is optional.
 - Password precedence is env var over config.
